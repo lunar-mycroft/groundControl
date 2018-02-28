@@ -5,7 +5,7 @@ def getOpts():
     args=sys.argv
     lastKey='nokey'
     opts[lastKey]=[]
-    
+
     while(args):
         if args[0][0]=='-':
             lastKey=args[0]
