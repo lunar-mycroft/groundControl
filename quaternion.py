@@ -15,7 +15,7 @@ class Quaternion:
 
     def rotateVector(self,vec):
         t=self.vec.cross(vec)*2
-        return vec+t*self.w+self.v.cross(t)
+        return vec+t*self.w+self.vec.cross(t)
 
     def fromAxisAngle(self,axis,theta):
         self.w=cos(theta/2)
@@ -23,6 +23,13 @@ class Quaternion:
         self.vec=normalize(axis)*sht
 
     def fromTwoVectors(self,orig,target):
-        self.fromAxisAngle(orig.cross(target),acos(orig.dot(target)))
+        o=normalize(orig)
+        t=normalize(target)
+        self.fromAxisAngle(o.cross(t),acos(o.dot(t)))
 
-    
+def invert(q):
+    return Quaternion(q.vec*(-1),q.w)
+
+test=Quaternion()
+test.fromTwoVectors(Vector((1,0,0)),Vector((1,1,0)))
+result=invert(test).rotateVector(Vector((1,1,0)))
