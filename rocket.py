@@ -1,119 +1,106 @@
 from vector import Vector, normalize,getPerpComponent
 from quaternion import Quaternion
-from math import asin, acos,sqrt,pi
+from math import asin, acos,sqrt,pi,sin
 from utility import hexToFloat
 
-class Rocket:
+class Flight:
+    north=Vector((0,0,0))
+    up=Vector((0,0,0))
+
+    pointing=Vector((1,0,0))
+    rollRef=Vector((0,0,1))
+    last=None
+
     def __init__(self):
-        self.q=Quaternion()
-        self.oldQ=Quaternion()
-
-        #Absolute vectors
-        self.up=Vector()
-        self.north=Vector()
-        self.east=Vector()
-
-        #Position
+        self.q=Quaternion();
         self.a=Vector()
         self.v=Vector()
-        self.r=Vector()
+        self.rho=0
+        self.flightEvent=0
+        self.t=0
 
-        #relative vectors
-        self.pointing=Vector((1,0,0))
-        self.rollRef=Vector((0,1,0))
+        self.previous=Flight.last
+        last=self
 
-        self.event=0
-        self.time=0
-        self.lastTime=0
-    def processTelemetry(self,line):
-        self.oldQ.vec=Vector((self.q.vec.x,self.q.vec.y,self.q.vec.z))
-        self.oldQ.w=self.q.w
-        self.oldTime=self.time
+    def getV(self):
+        return self._getRandV()[0]
 
-        qx = hexToFloat(line[0:8])
-        qy = hexToFloat(line[8:16])
-        qz = hexToFloat(line[16:24])
-        qw = hexToFloat(line[24:32])
+    def getSpeed(self):
+        return abs(self.getV())
 
-        ax = hexToFloat(line[32:40])
-        ay = hexToFloat(line[40:48])
-        az = hexToFloat(line[48:56])
+    def getPos(self):
+        return self._getRandV()[1]
 
-        self.q=Quaternion(Vector((qx,qy,qz)),qw)
+    def getPitch(self,degrees=False):
+        return asin(self._getPitchRef().dot(Flight.up))*(180/pi if degrees else 1)
 
-        self.a=Vector((ax,ay,az))
-
-        deltaT=(self.time-self.oldT)/1000000
-
-        oldV=self.v
-        self.v=self.v+self.q.rotateVector(self.a*deltaT)
-
-        self.r=oldV*deltaT+self.q.rotateVector(self.a)*(deltaT**2)/2
-
-
-    def getPitch(self):
-        return asin(self.up.dot(self.q.rotateVector(self.pointing)))
-
-    def getRoll(self):
+    def getRoll(self,degrees=False):
         ref=None
         if self.getPitch()>pi/2-0.01:
-            ref=self.q.rotateVector(self.rollRef)
+            ref=self._getRawRollRef()
         elif self.getPitch()<0.01-pi/2:
-            ref=self.q.rotateVector(self.rollRef)*(-1)
-        elif self.getPitch()>0:
-            currentPoint=self.q.rotateVector(self.pointing)
-            pitchFix=Quaternion
-            pitchFix.fromTwoVectors(currentPoint,self.up)
-
-            ref=pitchFix.rotateVector(self.q.rotateVector(self.pointing))
-
-
+            self._getRawRollRef()*-1
         else:
-            currentPoint = self.q.rotateVector(self.pointing)
-            pitchFix = Quaternion
-            pitchFix.fromTwoVectors(currentPoint, self.up*(-1))
+            Q=Quaternion()
+            Q.fromTwoVectors(self._getPointing(),Flight.up)
 
-            ref = pitchFix.rotateVector(self.q.rotateVector(self.pointing))
+            ref=normalize(Q.rotateVector(self.q.rotateVector(self._getRawRollRef()))*(1 if self.getPitch()>0 else -1))
 
+        return (acos(not Flight.north.dot(ref))+(pi if Flight.east().dot(ref)<=0 else 0))*(180/pi if degrees else 1)
 
-        return (0 if self.east.dot(ref)>0 else pi)+acos(self.north.dot(ref))
-
-    def getRollRate(self):
-        deltaT=(self.time-self.lastTime)/1000000
-
-        roll=self.getRoll()
-        oldRoll=self.getOldRoll()
-
-        if roll>7/4*pi and oldRoll<1/4*pi:
-            return ((roll-2*pi)-oldRoll)/deltaT
-        elif oldRoll>7/4*pi and roll<1/4*pi:
-            return (roll-(oldRoll-2*pi))/deltaT
+    def getRollRate(self,degrees=False):
+        oldRoll=self.previous.getRoll()
+        currentRoll=self.getRoll()
+        deltaT=self.t-self.previous.t
+        rate=None
+        if oldRoll>7/4*pi and currentRoll < 1/4*pi:
+            rate=(currentRoll-oldRoll+2*pi)/deltaT
+        elif oldRoll <1/4*pi and currentRoll>7/4*pi:
+            rate=(currentRoll-oldRoll-2*pi)/deltaT
         else:
-            return (roll-oldRoll)/deltaT
+            rate (currentRoll-oldRoll)/deltaT
 
-    def getOldRoll(self):
-        ref = None
-        if self.getPitch() > pi / 2 - 0.01:
-            ref = self.oldQ.rotateVector(self.rollRef)
-        elif self.getPitch() < 0.01 - pi / 2:
-            ref = self.oldQ.rotateVector(self.rollRef) * (-1)
-        elif self.getPitch() > 0:
-            currentPoint = self.oldQ.rotateVector(self.pointing)
-            pitchFix = Quaternion
-            pitchFix.fromTwoVectors(currentPoint, self.up)
+        return rate*(180/pi if degrees else 1)
 
-            ref = pitchFix.rotateVector(self.oldQ.rotateVector(self.pointing));
+    def getAltitude(self):
+        return self.getPos().dot(Flight.up)
 
+    def getDownRange(self):
+        return sqrt(abs(self.getPos())**2 - self.getAltitude()**2)
+
+    def getApogee(self):
+        canidate=self.previous.getApogee() if self.previous!=None else 0
+        if self.getAltitude()>canidate:
+            return self.getAltitude()
         else:
-            currentPoint = self.oldQ.rotateVector(self.pointing)
-            pitchFix = Quaternion
-            pitchFix.fromTwoVectors(currentPoint, self.up * (-1))
+            return canidate
 
-            ref = pitchFix.rotateVector(self.oldQ.rotateVector(self.pointing));
+    def getMaxSpeed(self):
+        canidate=self.previous.getMaxSpeed() if self.previous!=None else 0
+        if self.getSpeed()>canidate:
+            return self.getSpeed()
+        else:
+            return canidate
 
-        return (0 if self.east.dot(ref) > 0 else pi) + acos(self.north.dot(ref))
+    def _getRandV(self):
+        lastVal=(Vector((0,0,0)),Vector((0,0,0))) if self.previous==None else self.previous._getRandV()
+        v0=lastVal[0]
+        r0=lastVal[1]
+        deltaT=self.t-self.previous.t
 
-    def getYaw(self):
-        ref=getPerpComponent(self.up,self.q.rotateVector(self.pointing))
-        return (0 if self.east.dot(ref) > 0 else pi) + acos(self.north.dot(ref))
+        return (v0+self.a*deltaT,r0+v0*deltaT+0.5*self.a*deltaT**2)
 
+    def _getPointing(self):
+        return normalize(self.q.rotateVector(Flight.pointing))
+
+    def _getRawRollRef(self):
+        return normalize(self.q.rotateVector(Flight.rollRef))
+
+    @classmethod
+    def east(cls):
+        return normalize(cls.north.cross(cls.up))
+
+    @classmethod
+    def createRefrence(cls,line):
+        #Parse the line
+        return None
