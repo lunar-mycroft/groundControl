@@ -6,7 +6,9 @@ logFile=open("Launch1Log.TXT")
 
 lines=[]
 for line in logFile:
-    lines.append(line[:32])
+    lines.append(line[:64])
 
-for line in lines[1:]:
-    print(line)
+for line in lines:
+    #print(line)
+    snapShot=Flight(line)
+    print(snapShot)

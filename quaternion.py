@@ -10,7 +10,7 @@ class Quaternion:
         return sqrt(abs(self.vec)**2+self.w**2)
 
     def __str__(self):
-        return '('+str(self.vec.x)+','+str(self.vec.y)+','+str(self.vec.z)+str(self.w)+')'
+        return '('+str(self.vec.x)+','+str(self.vec.y)+','+str(self.vec.z)+','+str(self.w)+')'
 
     def normalize(self):
         self.vec=self.vec*abs(self)
