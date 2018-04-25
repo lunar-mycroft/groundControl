@@ -11,16 +11,33 @@ class Flight:
     rollRef=Vector((0,0,1))
     last=None
 
-    def __init__(self):
-        self.q=Quaternion();
-        self.a=Vector()
-        self.v=Vector()
-        self.rho=0
-        self.flightEvent=0
-        self.t=0
+    def __init__(self,line):
+        nums = []
+        if Flight.last==None:
+            self.flightEvent=0
+            self.t=0
+            self.flightEvent=0
+            for i in range(0,48,8):
+                nums.append(hexToFloat(line[i:i + 8]))
+
+            g=Vector((nums[0],nums[1],nums[2]))
+            m=Vector((nums[3],nums[4],nums[5]))
+
+            Flight.up=normalize(g)*-1
+            Flight.north=normalize(m-m.dot(Flight.up)*Flight.up)
+
+        else:
+            for i in range(0,56,8):
+                nums.append(hexToFloat(line[i:i+8]))
+
+            self.q=Quaternion(Vector((nums[0],nums[1],nums[2])),nums[3]);
+            self.a=Vector((nums[4],nums[5],nums[6]))
+            self.rho=0
+            self.flightEvent=0
+            self.t=int(line[56:])
 
         self.previous=Flight.last
-        last=self
+        Flight.last=self
 
     def getV(self):
         return self._getRandV()[0]
@@ -96,11 +113,23 @@ class Flight:
     def _getRawRollRef(self):
         return normalize(self.q.rotateVector(Flight.rollRef))
 
+
+    def __str__(self):
+        return "At t="+str(self.t)+", the rocket was at altitude "+str(self.getAltitude())+"m and speed "+self.getSpeed()+"m s^-2\m\n"+
+               ""
+
     @classmethod
     def east(cls):
         return normalize(cls.north.cross(cls.up))
 
     @classmethod
-    def createRefrence(cls,line):
-        #Parse the line
-        return None
+    def makeRefrence(cls,line):
+        nums = []
+        for i in range(0, 48, 8):
+            nums.append(hexToFloat(line[i:i + 8]))
+
+        g = Vector((nums[0], nums[1], nums[2]))
+        m = Vector((nums[3], nums[4], nums[5]))
+
+        cls.up = normalize(g) * -1
+        cls.north = normalize(m - m.dot(Flight.up) * Flight.up)
